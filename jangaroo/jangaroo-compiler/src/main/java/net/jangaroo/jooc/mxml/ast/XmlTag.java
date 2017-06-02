@@ -1,7 +1,5 @@
 package net.jangaroo.jooc.mxml.ast;
 
-import com.google.common.base.Predicate;
-import com.google.common.collect.Iterables;
 import net.jangaroo.jooc.JooSymbol;
 import net.jangaroo.jooc.Scope;
 import net.jangaroo.jooc.ast.AstNode;
@@ -21,8 +19,6 @@ import java.util.Objects;
 
 public class XmlTag extends NodeImplBase {
 
-  static final String XMLNS = "xmlns";
-
   private final Map<String, String> xmlNamespaces = new HashMap<>();
 
   private final String defaultXmlNamespace;
@@ -33,6 +29,7 @@ public class XmlTag extends NodeImplBase {
   private final JooSymbol gt;
 
   private XmlElement xmlElement;
+  private JooSymbol id;
 
   public XmlTag(JooSymbol lt, Ide tagName, List<XmlAttribute> attributes, JooSymbol gt) {
     this.lt = lt;
@@ -42,15 +39,15 @@ public class XmlTag extends NodeImplBase {
 
     // extract namespace definitions
     String defaultNamespace = null;
-    if(null != attributes) {
+    if (attributes != null) {
       for (XmlAttribute attribute : attributes) {
-        String localName = attribute.getLocalName();
-        String namespace = attribute.getPrefix();
-        String text = (String) attribute.getValue().getJooValue();
-        if (XMLNS.equals(namespace)) {
-          xmlNamespaces.put(localName, text);
-        } else if (null == namespace && XMLNS.equals(localName)) {
-          defaultNamespace = text;
+        String attributeValue = (String) attribute.getValue().getJooValue();
+        if (attribute.isNamespacePrefixDefinition()) {
+          xmlNamespaces.put(attribute.getLocalName(), attributeValue);
+        } else if (attribute.isDefaultNamespaceDefinition()) {
+          defaultNamespace = attributeValue;
+        } else if (attribute.isId()) {
+          id = attribute.getValue();
         }
       }
     }
@@ -60,6 +57,10 @@ public class XmlTag extends NodeImplBase {
   @Override
   public JooSymbol getSymbol() {
     return lt;
+  }
+
+  public JooSymbol getClosingSymbol() {
+    return gt;
   }
 
   @Override
@@ -121,23 +122,11 @@ public class XmlTag extends NodeImplBase {
   }
 
   XmlAttribute getAttribute(final String name) {
-    return Iterables.getFirst(
-            Iterables.filter(attributes, new Predicate<XmlAttribute>() {
-              @Override
-              public boolean apply(@Nullable XmlAttribute input) {
-                return null != input && Objects.equals(name, input.getSymbol().getText());
-              }
-            }), null);
+    return attributes.stream().filter(input -> null != input && Objects.equals(name, input.getSymbol().getText())).findFirst().orElse(null);
   }
 
   XmlAttribute getAttribute(final String namespaceUri, final String localName) {
-    return Iterables.getFirst(
-            Iterables.filter(attributes, new Predicate<XmlAttribute>() {
-              @Override
-              public boolean apply(@Nullable XmlAttribute input) {
-                return null != input && Objects.equals(namespaceUri, xmlElement.getNamespaceUri(input.getPrefix())) && Objects.equals(localName, input.getLocalName());
-              }
-            }), null);
+    return attributes.stream().filter(input -> null != input && Objects.equals(namespaceUri, xmlElement.getNamespaceUri(input.getPrefix())) && Objects.equals(localName, input.getLocalName())).findFirst().orElse(null);
   }
 
   public List<XmlAttribute> getAttributes() {
@@ -153,5 +142,9 @@ public class XmlTag extends NodeImplBase {
 
   void setElement(XmlElement xmlElement) {
     this.xmlElement = xmlElement;
+  }
+
+  public JooSymbol getIdSymbol() {
+    return id;
   }
 }

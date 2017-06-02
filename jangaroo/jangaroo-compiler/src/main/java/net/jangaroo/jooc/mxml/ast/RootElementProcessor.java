@@ -1,59 +1,50 @@
 package net.jangaroo.jooc.mxml.ast;
 
-import com.google.common.base.Predicate;
-import com.google.common.collect.Collections2;
-import net.jangaroo.jooc.CompilerError;
 import net.jangaroo.jooc.JooSymbol;
+import net.jangaroo.jooc.ast.Ide;
+import net.jangaroo.jooc.mxml.MxmlComponentRegistry;
 import net.jangaroo.jooc.mxml.MxmlUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import javax.annotation.Nullable;
-import java.util.Iterator;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Helper class to consume MXML elements and attributes
  */
 class RootElementProcessor {
 
-  /**
-   * http://help.adobe.com/en_US/flex/using/WS2db454920e96a9e51e63e3d11c0bf688f1-7ff1.html
-   */
-  private static final String IMPLEMENTS = "implements";
-
-  private final List<XmlElement> declarations = new LinkedList<XmlElement>();
-  private final List<JooSymbol> imports = new LinkedList<JooSymbol>();
-  private final List<JooSymbol> metadata = new LinkedList<JooSymbol>();
-  private final List<JooSymbol> scripts = new LinkedList<JooSymbol>();
+  private XmlElement declarationsElement;
+  private final List<XmlElement> references = new LinkedList<>();
+  private final List<JooSymbol> imports = new LinkedList<>();
+  private final List<JooSymbol> metadata = new LinkedList<>();
+  private final List<JooSymbol> scripts = new LinkedList<>();
 
   private JooSymbol impl = null;
 
-  void process(XmlElement rootNode) {
+  void process(MxmlComponentRegistry mxmlComponentRegistry, XmlElement rootNode) {
+    rootNode.resolveClass(mxmlComponentRegistry);
     processAttributes(rootNode);
     processElements(rootNode);
+    findReferences(mxmlComponentRegistry, rootNode);
   }
 
   /**
    * consume built-in top level MXML elements
    */
   private void processElements(XmlElement rootNode) {
-    Iterator<XmlElement> it = rootNode.getElements().iterator();
-    while (it.hasNext()) {
-      XmlElement element = it.next();
+    for (XmlElement element : rootNode.getElements()) {
       if (MxmlUtils.isMxmlNamespace(element.getNamespaceURI())) {
-        it.remove();
         String name = element.getName();
-
-        if (MxmlUtils.MXML_DECLARATIONS.equals(name)) {
-          declarations.addAll(element.getElements());
-        } else if (MxmlUtils.MXML_METADATA.equals(name)) {
+        if (MxmlUtils.MXML_METADATA.equals(name)) {
           addAll(element.getTextNodes(), metadata);
         } else if (MxmlUtils.MXML_SCRIPT.equals(name)) {
           addAll(element.getTextNodes(), scripts);
-        } else {
-          // http://help.adobe.com/en_US/FlashPlatform/reference/actionscript/3/mxml-tag-detail.html
-          throw new CompilerError(element.getSymbol(), "unsupported element");
+        } else if (MxmlUtils.MXML_DECLARATIONS.equals(name)) {
+          declarationsElement = element;
         }
       }
     }
@@ -64,33 +55,42 @@ class RootElementProcessor {
    */
   private void processAttributes(XmlElement rootNode) {
     List<XmlAttribute> rootNodeAttributes = rootNode.getAttributes();
-    Iterator<XmlAttribute> it = rootNodeAttributes.iterator();
-    while (it.hasNext()) {
-      XmlAttribute xmlAttribute = it.next();
-
+    for (XmlAttribute xmlAttribute : rootNodeAttributes) {
       if (xmlAttribute.isNamespaceDefinition()) {
         imports.add(xmlAttribute.getValue());
-      } else if (isImplements(xmlAttribute)) {
+      } else if (xmlAttribute.isImplements()) {
         impl = xmlAttribute.getValue();
       }
     }
   }
 
-  private static boolean isImplements(XmlAttribute xmlAttribute) {
-    return IMPLEMENTS.equals(xmlAttribute.getLocalName()) && StringUtils.isBlank(xmlAttribute.getPrefix());
+  private void findReferences(MxmlComponentRegistry mxmlComponentRegistry, XmlElement node) {
+    node.resolveClass(mxmlComponentRegistry);
+    JooSymbol idSymbol = node.getIdSymbol();
+    if (idSymbol != null) {
+      Ide.verifyIdentifier((String) idSymbol.getJooValue(), idSymbol);
+      if (node.parent != declarationsElement) {
+        references.add(node);
+      }
+    }
+    node.getElements().forEach(subElement -> findReferences(mxmlComponentRegistry, subElement));
   }
 
   private void addAll(List<JooSymbol> textNodes, List<JooSymbol> target) {
-    target.addAll(Collections2.filter(textNodes, new Predicate<JooSymbol>() {
-      @Override
-      public boolean apply(@Nullable JooSymbol symbol) {
-        return null != symbol && StringUtils.isNotBlank(symbol.getText());
-      }
-    }));
+    target.addAll(textNodes.stream().filter(symbol -> null != symbol && StringUtils.isNotBlank(symbol.getText()))
+            .collect(Collectors.toList()));
+  }
+
+  XmlElement getDeclarationsElement() {
+    return declarationsElement;
   }
 
   List<XmlElement> getDeclarations() {
-    return declarations;
+    return declarationsElement == null ? Collections.emptyList() : declarationsElement.getElements();
+  }
+
+  List<XmlElement> getReferences() {
+    return references;
   }
 
   List<JooSymbol> getImports() {
@@ -110,7 +110,4 @@ class RootElementProcessor {
     return impl;
   }
 
-  static boolean alreadyProcessed(XmlAttribute attribute) {
-    return attribute.isNamespaceDefinition() || isImplements(attribute);
-  }
 }

@@ -1,7 +1,7 @@
 package package1{
 import ext.mixin.Observable;
 
-[Event(name="click", type="package1.someOtherPackage.SomeEvent")]
+[Event(name="onClick", type="package1.someOtherPackage.SomeEvent")]
 
 public class ConfigClass extends Observable {
 
@@ -22,6 +22,10 @@ public class ConfigClass extends Observable {
 
   [ExtConfig(extractXType="defaultType")]
   public native function set defaults(value:*):void;
+
+  public native function get defaultType():String;
+
+  public native function set defaultType(value:String):void;
 
   private var _title:String = "- empty -";
 

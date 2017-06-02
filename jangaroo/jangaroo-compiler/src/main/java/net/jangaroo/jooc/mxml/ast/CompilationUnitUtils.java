@@ -8,10 +8,19 @@ import net.jangaroo.jooc.ast.Parameter;
 import net.jangaroo.jooc.ast.Parameters;
 import net.jangaroo.jooc.mxml.MxmlUtils;
 
+import javax.annotation.Nonnull;
+
 class CompilationUnitUtils {
   static boolean constructorSupportsConfigOptionsParameter(String classQName, CompilationUnitResolver resolver) {
     CompilationUnit compilationUnitModel = resolver.resolveCompilationUnit(classQName);
-    ClassDeclaration classModel = (ClassDeclaration) compilationUnitModel.getPrimaryDeclaration();
+    return constructorSupportsConfigOptionsParameter(compilationUnitModel);
+  }
+
+  static boolean constructorSupportsConfigOptionsParameter(@Nonnull CompilationUnit compilationUnit) {
+    return constructorSupportsConfigOptionsParameter((ClassDeclaration) compilationUnit.getPrimaryDeclaration());
+  }
+
+  static boolean constructorSupportsConfigOptionsParameter(@Nonnull ClassDeclaration classModel) {
     if (classModel != null) {
       FunctionDeclaration constructorModel = classModel.getConstructor();
       if (constructorModel != null) {
