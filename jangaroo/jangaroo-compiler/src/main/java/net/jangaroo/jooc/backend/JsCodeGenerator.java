@@ -1538,11 +1538,22 @@ public class JsCodeGenerator extends CodeGeneratorBase {
 
   private void registerField(VariableDeclaration variableDeclaration, List<Metadata> currentMetadata) {
     String variableName = variableDeclaration.getName();
+    if (variableDeclaration.isPrivate() && !variableDeclaration.isStatic()) {
+      variableName += "$" + ((ClassDeclaration)compilationUnit.getPrimaryDeclaration()).getInheritanceLevel();
+    }
     boolean isBindable = variableDeclaration.getAnnotation(Jooc.BINDABLE_ANNOTATION_NAME) != null;
     String value = null;
     if (mustInitializeInStaticCode(variableDeclaration)) {
       if (variableDeclaration.isStatic()) {
         primaryClassDefinitionBuilder.staticCode.append("          ").append(variableName).append("$static_();\n");
+      } else if (!isBindable && !variableDeclaration.isPrimaryDeclaration()) {
+        PropertyDefinition fieldInitializer = new PropertyDefinition();
+        fieldInitializer.get = variableDeclaration.getName() + "_";
+        fieldInitializer.configurable = true;
+        if (!variableDeclaration.isConst()) {
+          fieldInitializer.set = String.format("function(value){this.%s;return this.%s=value;}", variableName, variableName);
+        }
+        getClassDefinitionBuilder(variableDeclaration).members.put(variableName, fieldInitializer);
       }
       if (isBindable || variableDeclaration.isStatic()) {
         // make sure that configs are always declared, even with dynamic initializer, so that Ext magic is applied:
@@ -1569,9 +1580,6 @@ public class JsCodeGenerator extends CodeGeneratorBase {
           TypeRelation typeRelation = variableDeclaration.getOptTypeRelation();
           value = VariableDeclaration.getDefaultValue(typeRelation);
         }
-      }
-      if (variableDeclaration.isPrivate() && !variableDeclaration.isStatic()) {
-        variableName += "$" + ((ClassDeclaration)compilationUnit.getPrimaryDeclaration()).getInheritanceLevel();
       }
     }
     if (variableDeclaration.isPrimaryDeclaration()) {
@@ -1632,11 +1640,15 @@ public class JsCodeGenerator extends CodeGeneratorBase {
         out.writeToken("}");
       } else {
         if (variableDeclaration.isPrimaryDeclaration()) {
-          out.writeToken("return");
+          out.writeToken("return(");
         } else {
-          out.write(target + "." + slotName + "=");
+          if (!variableDeclaration.isStatic()) {
+            out.write("return AS3." + (variableDeclaration.isConst() ? "initConst" : "initVar") +
+                    "(" + target + "," + CompilerUtils.quote(slotName) + ",");
+          } else {
+            out.write(target + "." + slotName + "=(");
+          }
         }
-        out.writeToken("(");
         initializer.getValue().visit(this);
       }
     }
@@ -1866,7 +1878,7 @@ public class JsCodeGenerator extends CodeGeneratorBase {
   }
 
   public void generateInitCode(VariableDeclaration field, boolean endWithSemicolon) throws IOException {
-    out.write(field.getName() + "_.call(this)");
+    out.write("this." + field.getName() + (field.isPrivate() ? "$" + field.getClassDeclaration().getInheritanceLevel() : ""));
     if (endWithSemicolon) {
       out.write(";");
     }

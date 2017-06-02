@@ -17,9 +17,9 @@ package package1 {
 
 public class TestBind {
 
-  public var boundField:Function =*/function boundField_(){this.boundField=(AS3.bind( this,"getStatePrivate$1"));}/*;
+  public var boundField:Function =*/function boundField_(){return AS3.initVar(this,"boundField",AS3.bind( this,"getStatePrivate$1"));}/*;
 
-  public*/ function TestBind$(state/* : String*/) {boundField_.call(this);
+  public*/ function TestBind$(state/* : String*/) {this.boundField;
     this.state$1 = state;
     var bound/*:Function*/ =AS3.bind( this,"getStatePrivate$1");
   }/*
@@ -42,6 +42,11 @@ public class TestBind {
       constructor: TestBind$,
       getState: getState,
       getStatePrivate$1: getStatePrivate,
-      state$1: null
+      state$1: null,
+      __accessors__: {boundField: {
+        get: boundField_,
+        set: function(value){this.boundField;return this.boundField=value;},
+        configurable: true
+      }}
     };
 });
